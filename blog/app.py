@@ -22,8 +22,7 @@ def read_user():
 @app.route("/status/", methods=["GET", "POST"])
 def custom_status_code():
     if request.method == "GET":
-        return """\
-        To get response with custom status code
+        return """\To get response with custom status code
         send request using POST method
         and pass `code` in JSON body / FormData
         """
