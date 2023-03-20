@@ -1,12 +1,32 @@
 from time import time
-from flask import Flask, request, g
+from flask import Flask, request, g, render_template
 from werkzeug.exceptions import BadRequest
+from blog.views.users import users_app
+from blog.views.articles import articles_app
+from blog.models import User
+from blog.views.auth import login_manager, auth_app
+from blog.models.database import db
+import os
+from flask_migrate import Migrate
+
+migrate = Migrate(app, db, compare_type=True)
+cfg_name = os.environ.get("CONFIG_NAME") or "ProductionConfig"
+app.config.from_object(f"blog.configs.{cfg_name}")
 
 app = Flask(__name__)
+app.register_blueprint(users_app, url_prefix="/users")
+app.register_blueprint(articles_app, url_prefix="/articles")
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////tmp/blog.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db.init_app(app)
+app.config["SECRET_KEY"] = "abcdefg123456"
+app.register_blueprint(auth_app, url_prefix="/auth")
+login_manager.init_app(app)
 
 @app.route("/")
 def index():
-    return 'Hello world'
+    return render_template("index.html")
+
 
 @app.route("/greet/<name>/")
 def greet_name(name: str):
@@ -18,6 +38,7 @@ def read_user():
     name = request.args.get("name")
     surname = request.args.get("surname")
     return f"User {name or '[no name]'} {surname or '[no surname]'}"
+
 
 @app.route("/status/", methods=["GET", "POST"])
 def custom_status_code():
@@ -40,6 +61,8 @@ def process_before_request():
     Sets start_time to `g` object
     """
     g.start_time = time()
+
+
 @app.after_request
 def process_after_request(response):
     """
@@ -48,6 +71,7 @@ def process_after_request(response):
     if hasattr(g, "start_time"):
         response.headers["process-time"] = time() - g.start_time
     return response
+
 
 @app.route("/power/")
 def power_value():
@@ -62,11 +86,43 @@ def power_value():
     app.logger.debug("%s ** %s = %s", x, y, result)
     return str(result)
 
+
 @app.route("/divide-by-zero/")
 def do_zero_division():
     return 1 / 0
+
+
 @app.errorhandler(ZeroDivisionError)
 def handle_zero_division_error(error):
-    print(error) # prints str version of error: 'division by zero'
+    print(error)  # prints str version of error: 'division by zero'
     app.logger.exception("Here's traceback for zero division error")
     return "Never divide by zero!", 400
+
+
+
+
+@app.cli.command("init-db")
+def init_db():
+    """
+    Run in your terminal:
+    flask init-db
+    """
+    db.create_all()
+    print("done!")
+
+
+@app.cli.command("create-users")
+def create_users():
+    """
+    Run in your terminal:
+    flask create-users
+    > done! created users: <User #1 'admin'> <User #2 'james'>
+    """
+    admin = User(username="admin", is_staff=True)
+    james = User(username="james")
+    db.session.add(admin)
+    db.session.add(james)
+    db.session.commit()
+    print("done! created users:", admin, james)
+
+
